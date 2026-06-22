@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="FCG.Catalogo.Application/FCG.Catalogo.Application.csproj" />
+  <Project Path="FCG.Catalogo.Domain/FCG.Catalogo.Domain.csproj" />
+  <Project Path="FCG.Catalogo.Infrastructure/FCG.Catalogo.Infrastructure.csproj" />
+  <Project Path="FCG.Catalogo.Presentation/FCG.Catalogo.Presentation.csproj" />
+  <Project Path="FCG.Catalogo.Worker/FCG.Catalogo.Worker.csproj" />
+</Solution>

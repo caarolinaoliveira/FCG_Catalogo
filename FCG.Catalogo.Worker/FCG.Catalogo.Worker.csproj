@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-FCG.Catalogo.Worker-cad8aec2-e603-4544-b297-688894a9c313</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FCG.Catalogo.Application\FCG.Catalogo.Application.csproj" />
+    <ProjectReference Include="..\FCG.Catalogo.Infrastructure\FCG.Catalogo.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
