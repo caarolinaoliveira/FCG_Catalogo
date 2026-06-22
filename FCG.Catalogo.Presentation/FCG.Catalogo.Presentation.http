@@ -1,0 +1,6 @@
+@FCG.Catalogo.Presentation_HostAddress = http://localhost:5133
+
+GET {{FCG.Catalogo.Presentation_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
