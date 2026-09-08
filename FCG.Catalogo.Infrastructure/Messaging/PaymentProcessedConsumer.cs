@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using FCG.Catalogo.Application.Events;
@@ -15,6 +16,17 @@ namespace FCG.Catalogo.Infrastructure.Messaging
 {
     public class PaymentProcessedConsumer : BackgroundService
     {
+        private static readonly ActivitySource ActivitySource = new("FCG.Catalogo.PaymentProcessedConsumer");
+
+        static PaymentProcessedConsumer()
+        {
+            ActivitySource.AddActivityListener(new ActivityListener
+            {
+                ShouldListenTo = _ => true,
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData
+            });
+        }
+
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<PaymentProcessedConsumer> _logger;
         private readonly IConnection _connection;
@@ -67,6 +79,8 @@ namespace FCG.Catalogo.Infrastructure.Messaging
 
             consumer.ReceivedAsync += async (sender, ea) =>
             {
+                using var activity = ActivitySource.StartActivity("payment.processed.consume");
+
                 if (_circuitBreaker.CircuitState == CircuitState.Open)
                 {
                     _logger.LogWarning("[CATALOGO] Circuito aberto — reenfileirando mensagem.");

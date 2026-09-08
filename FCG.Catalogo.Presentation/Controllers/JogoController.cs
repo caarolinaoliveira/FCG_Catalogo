@@ -56,29 +56,26 @@ namespace FCG.Catalogo.Presentation.Controllers
             return Ok(response);
         }
 
-        // [Authorize(Roles = "Admin")]
         [AllowAnonymous]
         [HttpPost("cadastrar")]
         [ProducesResponseType(typeof(JogoResponse), (int)HttpStatusCode.Created)]
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-        public async Task<IActionResult> CadastrarJogo(CriarJogoRequest request)
+        public async Task<IActionResult> CadastrarJogo([FromBody] CriarJogoRequest request)
         {
             var response = await _jogoService.CriarJogoAsync(request);
             return CreatedAtAction(nameof(CadastrarJogo), new { id = response.Id }, response);
         }
 
-        // [Authorize(Roles = "Admin")]
         [AllowAnonymous]
         [HttpPut("{id:guid}")]
         [ProducesResponseType(typeof(JogoResponse), (int)HttpStatusCode.OK)]
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-        public async Task<IActionResult> AtualizarJogo(Guid id, AtualizarJogoRequest request)
+        public async Task<IActionResult> AtualizarJogo(Guid id, [FromBody] AtualizarJogoRequest request)
         {
             var response = await _jogoService.AtualizarJogoAsync(id, request);
             return Ok(response);
         }
 
-        // [Authorize(Roles = "Admin")]
         [AllowAnonymous]
         [HttpDelete("{id:guid}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]

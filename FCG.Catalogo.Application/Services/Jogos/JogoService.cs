@@ -1,21 +1,27 @@
 using FCG.Catalogo.Application.Requests.Jogos;
 using FCG.Catalogo.Application.Responses.Jogos;
-using FCG.Catalogo.Application.Interfaces;       
+using FCG.Catalogo.Application.Interfaces;
 using FCG.Catalogo.Domain.Interfaces;
 using FCG.Catalogo.Domain.Entities;
 using FCG.Catalogo.Domain.Exceptions;
 using FCG.Catalogo.Domain.Enums;
+using Microsoft.Extensions.Caching.Distributed;
+using System.Text.Json;
 
 
 namespace  FCG.Catalogo.Application.Services
 {
     public class JogoService : IJogoService
     {
-        private readonly IJogoRepository _jogoRepository;
+        private const string CacheKeyTodosJogos = "catalogo:jogos:todos";
 
-        public JogoService(IJogoRepository jogoRepository)
+        private readonly IJogoRepository _jogoRepository;
+        private readonly IDistributedCache _cache;
+
+        public JogoService(IJogoRepository jogoRepository, IDistributedCache cache)
         {
             _jogoRepository = jogoRepository;
+            _cache = cache;
         }
 
         public async Task<JogoResponse> CriarJogoAsync(CriarJogoRequest request)
@@ -34,6 +40,7 @@ namespace  FCG.Catalogo.Application.Services
             };
 
             await _jogoRepository.AdicionarAsync(jogo);
+            await _cache.RemoveAsync(CacheKeyTodosJogos);
 
             return new JogoResponse
             {
@@ -70,6 +77,7 @@ namespace  FCG.Catalogo.Application.Services
                 jogo.Genero = request.Genero.Value;
 
             await _jogoRepository.AtualizarAsync(jogo);
+            await _cache.RemoveAsync(CacheKeyTodosJogos);
 
             return new JogoResponse
             {
@@ -85,9 +93,13 @@ namespace  FCG.Catalogo.Application.Services
 
         public async Task<List<JogoResponse>> ObterTodosAsync()
         {
+            var cacheado = await _cache.GetStringAsync(CacheKeyTodosJogos);
+            if (cacheado is not null)
+                return JsonSerializer.Deserialize<List<JogoResponse>>(cacheado) ?? new List<JogoResponse>();
+
             var jogos = await _jogoRepository.ObterTodosAsync();
 
-            return jogos.Select(jogo => new JogoResponse
+            var response = jogos.Select(jogo => new JogoResponse
             {
                 Id = jogo.Id,
                 Titulo = jogo.Titulo,
@@ -97,6 +109,11 @@ namespace  FCG.Catalogo.Application.Services
                 DataLancamento = jogo.DataLancamento,
                 DataCriacao = jogo.DataCriacao
             }).ToList();
+
+            await _cache.SetStringAsync(CacheKeyTodosJogos, JsonSerializer.Serialize(response),
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60) });
+
+            return response;
         }
 
         public async Task<JogoResponse> ObterJogoPorIdAsync(Guid id)
@@ -146,6 +163,7 @@ namespace  FCG.Catalogo.Application.Services
                 throw new NotFoundException("Jogo não encontrado.");
 
             await _jogoRepository.DeletarAsync(jogo);
+            await _cache.RemoveAsync(CacheKeyTodosJogos);
         }
 
         

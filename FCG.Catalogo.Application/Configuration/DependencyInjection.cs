@@ -2,6 +2,7 @@ using FCG.Catalogo.Application.Interfaces;
 using FCG.Catalogo.Application.Services;
 using FCG.Catalogo.Application.Services.Pedidos;
 using FCG.Catalogo.Application.Services.Biblioteca;
+using FCG.Catalogo.Application.Services.Avaliacoes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FCG.Catalogo.Application.Configuration
@@ -13,6 +14,7 @@ namespace FCG.Catalogo.Application.Configuration
             services.AddScoped<IJogoService, JogoService>();
             services.AddScoped<IBibliotecaService, BibliotecaService>();
             services.AddScoped<IPedidoService, PedidoService>();
+            services.AddScoped<IAvaliacaoService, AvaliacaoService>();
 
             return services;
         }

@@ -1,4 +1,5 @@
 using FCG.Catalogo.Application.Interfaces;
+using FCG.Catalogo.Domain.Entities;
 using FCG.Catalogo.Domain.Interfaces;
 using FCG.Catalogo.Infrastructure.Context;
 using FCG.Catalogo.Infrastructure.Messaging;
@@ -6,6 +7,10 @@ using FCG.Catalogo.Infrastructure.Repository;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
+using MongoDB.Driver;
 using Polly;
 using RabbitMQ.Client;
 
@@ -26,6 +31,29 @@ namespace FCG.Catalogo.Infrastructure.Configuration
             services.AddScoped<IJogoRepository, JogoRepository>();
             services.AddScoped<IBibliotecaRepository, BibliotecaRepository>();
             services.AddScoped<IPedidoRepository, PedidoRepository>();
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(AvaliacaoEntity)))
+            {
+                BsonClassMap.RegisterClassMap<AvaliacaoEntity>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.GetMemberMap(nameof(AvaliacaoEntity.JogoId)).SetSerializer(new GuidSerializer(BsonType.String));
+                    cm.GetMemberMap(nameof(AvaliacaoEntity.UsuarioId)).SetSerializer(new GuidSerializer(BsonType.String));
+                });
+            }
+
+            services.AddSingleton<IMongoClient>(sp =>
+                new MongoClient(configuration["MongoDB:ConnectionString"] ?? "mongodb://localhost:27017"));
+
+            services.AddSingleton(sp =>
+                sp.GetRequiredService<IMongoClient>().GetDatabase(configuration["MongoDB:Database"] ?? "FCG_Catalogo"));
+
+            services.AddScoped<IAvaliacaoRepository, AvaliacaoRepository>();
+
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = configuration["Redis:ConnectionString"] ?? "localhost:6379";
+            });
 
             services.AddSingleton<IConnection>(sp =>
             {
