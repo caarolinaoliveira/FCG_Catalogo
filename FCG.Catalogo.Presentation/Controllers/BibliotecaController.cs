@@ -2,6 +2,7 @@ using FCG.Catalogo.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
+using Microsoft.Extensions.Logging;
 
 namespace FCG.Catalogo.Presentation.Controllers
 {
@@ -9,10 +10,12 @@ namespace FCG.Catalogo.Presentation.Controllers
     public class BibliotecaController : ControllerBase
     {
         private readonly IBibliotecaService _bibliotecaService;
+        private readonly ILogger<BibliotecaController> _logger;
 
-        public BibliotecaController(IBibliotecaService bibliotecaService)
+        public BibliotecaController(IBibliotecaService bibliotecaService, ILogger<BibliotecaController> logger)
         {
             _bibliotecaService = bibliotecaService;
+            _logger = logger;
         }
 
         [AllowAnonymous]
@@ -23,7 +26,12 @@ namespace FCG.Catalogo.Presentation.Controllers
         {
             var response = await _bibliotecaService.ObterBibliotecaAsync(usuarioId);
             if (response == null || !response.Any())
+            {
+                _logger.LogInformation("Biblioteca vazia para o usuário {UsuarioId}", usuarioId);
                 return NoContent();
+            }
+
+            _logger.LogInformation("Retornados {Quantidade} itens da biblioteca do usuário {UsuarioId}", response.Count(), usuarioId);
 
             return Ok(response);
         }

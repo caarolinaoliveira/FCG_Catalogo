@@ -5,6 +5,7 @@ using FCG.Catalogo.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.Net;
+using Microsoft.Extensions.Logging; 
 
 
 namespace FCG.Catalogo.Presentation.Controllers
@@ -13,10 +14,12 @@ namespace FCG.Catalogo.Presentation.Controllers
     public class JogoController : ControllerBase
     {
         private readonly IJogoService _jogoService;
+        private readonly ILogger<JogoController> _logger;
 
-        public JogoController(IJogoService jogoService)
+        public JogoController(IJogoService jogoService, ILogger<JogoController> logger)
         {
             _jogoService = jogoService;
+            _logger = logger;
         }
 
 
@@ -27,6 +30,9 @@ namespace FCG.Catalogo.Presentation.Controllers
         public async Task <IActionResult> ObterTodosJogos()
         {
             var response = await _jogoService.ObterTodosAsync();
+
+            _logger.LogInformation("Consulta de todos os jogos retornou {Quantidade} registros", response?.Count() ?? 0);
+
             return Ok(response);
         }
 
@@ -38,7 +44,10 @@ namespace FCG.Catalogo.Presentation.Controllers
         {
             var response = await _jogoService.ObterJogoPorIdAsync(id);
             if (response == null)
+            {
+                _logger.LogWarning("Jogo não encontrado para o Id {Id}", id);
                 return NotFound();
+            }
 
             return Ok(response);
         }
@@ -51,7 +60,10 @@ namespace FCG.Catalogo.Presentation.Controllers
         {
             var response = await _jogoService.ObterJogoPorTituloAsync(titulo);
             if (response == null)
+            {
+                _logger.LogWarning("Jogo não encontrado para o título {Titulo}", titulo);
                 return NotFound();
+            }
 
             return Ok(response);
         }
@@ -63,6 +75,9 @@ namespace FCG.Catalogo.Presentation.Controllers
         public async Task<IActionResult> CadastrarJogo([FromBody] CriarJogoRequest request)
         {
             var response = await _jogoService.CriarJogoAsync(request);
+
+            _logger.LogInformation("Jogo {Id} cadastrado com sucesso ({Titulo})", response.Id, response.Titulo);
+
             return CreatedAtAction(nameof(CadastrarJogo), new { id = response.Id }, response);
         }
 
@@ -73,6 +88,9 @@ namespace FCG.Catalogo.Presentation.Controllers
         public async Task<IActionResult> AtualizarJogo(Guid id, [FromBody] AtualizarJogoRequest request)
         {
             var response = await _jogoService.AtualizarJogoAsync(id, request);
+
+            _logger.LogInformation("Jogo {Id} atualizado com sucesso", id);
+
             return Ok(response);
         }
 
@@ -83,9 +101,15 @@ namespace FCG.Catalogo.Presentation.Controllers
         public async Task<IActionResult> DeletarJogo(Guid id)
         {
             if (id == Guid.Empty)
+            {
+                _logger.LogWarning("Tentativa de exclusão com Id vazio");
                 return BadRequest("O título do jogo é obrigatório.");
-            
+            }
+
             await _jogoService.DeletarJogoAsync(id);
+
+            _logger.LogInformation("Jogo {Id} excluído com sucesso", id);
+
             return NoContent();
         }
     }
