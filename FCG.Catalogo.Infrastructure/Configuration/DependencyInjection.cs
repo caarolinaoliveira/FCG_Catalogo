@@ -2,6 +2,7 @@ using FCG.Catalogo.Application.Interfaces;
 using FCG.Catalogo.Domain.Entities;
 using FCG.Catalogo.Domain.Interfaces;
 using FCG.Catalogo.Infrastructure.Context;
+using FCG.Catalogo.Infrastructure.Logging;
 using FCG.Catalogo.Infrastructure.Messaging;
 using FCG.Catalogo.Infrastructure.Repository;
 using Microsoft.EntityFrameworkCore;
@@ -49,6 +50,7 @@ namespace FCG.Catalogo.Infrastructure.Configuration
                 sp.GetRequiredService<IMongoClient>().GetDatabase(configuration["MongoDB:Database"] ?? "FCG_Catalogo"));
 
             services.AddScoped<IAvaliacaoRepository, AvaliacaoRepository>();
+            services.AddSingleton<IErroLogService, ErroLogService>();
 
             services.AddStackExchangeRedisCache(options =>
             {
