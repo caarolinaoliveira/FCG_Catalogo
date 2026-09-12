@@ -95,7 +95,12 @@ namespace  FCG.Catalogo.Application.Services
         {
             var cacheado = await _cache.GetStringAsync(CacheKeyTodosJogos);
             if (cacheado is not null)
+            {
+                NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("cacheHit", true);
                 return JsonSerializer.Deserialize<List<JogoResponse>>(cacheado) ?? new List<JogoResponse>();
+            }
+
+            NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("cacheHit", false);
 
             var jogos = await _jogoRepository.ObterTodosAsync();
 
