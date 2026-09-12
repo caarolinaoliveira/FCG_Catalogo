@@ -7,6 +7,7 @@ using FCG.Catalogo.Domain.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NewRelic.Api.Agent;
 using Polly.CircuitBreaker;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -77,10 +78,24 @@ namespace FCG.Catalogo.Infrastructure.Messaging
 
             var consumer = new AsyncEventingBasicConsumer(_channel);
 
-            consumer.ReceivedAsync += async (sender, ea) =>
-            {
-                using var activity = ActivitySource.StartActivity("payment.processed.consume");
+            consumer.ReceivedAsync += ProcessarMensagemAsync;
 
+            await _channel.BasicConsumeAsync("payment.processed", autoAck: false, consumer: consumer);
+            _logger.LogInformation("[CATALOGO] Aguardando mensagens na fila payment.processed...");
+
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+
+        [Transaction(Web = false)]
+        private async Task ProcessarMensagemAsync(object? sender, BasicDeliverEventArgs ea)
+        {
+            NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction
+                .AcceptDistributedTraceHeaders(ea.BasicProperties.Headers, ObterValoresHeader, TransportType.AMQP);
+
+            var parentContext = ExtrairContextoDistribuido(ea.BasicProperties.Headers);
+            using var activity = ActivitySource.StartActivity("payment.processed.consume", ActivityKind.Consumer, parentContext);
+
+            {
                 if (_circuitBreaker.CircuitState == CircuitState.Open)
                 {
                     _logger.LogWarning("[CATALOGO] Circuito aberto — reenfileirando mensagem.");
@@ -192,12 +207,7 @@ namespace FCG.Catalogo.Infrastructure.Messaging
                     await _channel.BasicPublishAsync("", "payment.processed", false, props, ea.Body);
                     await _channel.BasicAckAsync(ea.DeliveryTag, false);
                 }
-            };
-
-            await _channel.BasicConsumeAsync("payment.processed", autoAck: false, consumer: consumer);
-            _logger.LogInformation("[CATALOGO] Aguardando mensagens na fila payment.processed...");
-
-            await Task.Delay(Timeout.Infinite, stoppingToken);
+            }
         }
 
         public override void Dispose()
@@ -205,6 +215,39 @@ namespace FCG.Catalogo.Infrastructure.Messaging
             _channel?.CloseAsync().GetAwaiter().GetResult();
             _channel?.DisposeAsync().GetAwaiter().GetResult();
             base.Dispose();
+        }
+
+        private static ActivityContext ExtrairContextoDistribuido(IDictionary<string, object?>? headers)
+        {
+            var traceparent = ObterHeaderString(headers, "traceparent");
+            if (traceparent is null)
+            {
+                return default;
+            }
+
+            var tracestate = ObterHeaderString(headers, "tracestate");
+            return ActivityContext.TryParse(traceparent, tracestate, out var context) ? context : default;
+        }
+
+        private static string? ObterHeaderString(IDictionary<string, object?>? headers, string chave)
+        {
+            if (headers is null || !headers.TryGetValue(chave, out var valor) || valor is null)
+            {
+                return null;
+            }
+
+            return valor switch
+            {
+                string s => s,
+                byte[] bytes => Encoding.UTF8.GetString(bytes),
+                _ => valor.ToString()
+            };
+        }
+
+        private static IEnumerable<string> ObterValoresHeader(IDictionary<string, object?>? headers, string chave)
+        {
+            var valor = ObterHeaderString(headers, chave);
+            return valor is null ? Enumerable.Empty<string>() : new[] { valor };
         }
     }
 }
