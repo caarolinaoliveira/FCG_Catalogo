@@ -70,10 +70,6 @@ namespace FCG.Catalogo.Infrastructure.Messaging
                 }
             }
 
-            // Além do traceparent (W3C, usado pelo nosso próprio Activity/eventos_dominio),
-            // pede pro agente da New Relic inserir os headers no formato que a distributed
-            // tracing dela espera — sem isso o consumidor não vira span/transação vinculada
-            // no mesmo trace da New Relic, mesmo com o Activity.TraceId batendo.
             props.Headers ??= new Dictionary<string, object?>();
             NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.InsertDistributedTraceHeaders(
                 props.Headers, (headers, key, value) => headers[key] = value);
