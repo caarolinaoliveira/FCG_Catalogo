@@ -45,8 +45,7 @@ namespace FCG.Catalogo.Presentation.Configuration
                 c.UseInlineDefinitionsForEnums();
             });
 
-            var key = Encoding.UTF8.GetBytes(
-                configuration["JwtSettings:Segredo"] ?? throw new InvalidOperationException("JwtSettings:Segredo não configurado."));
+            var key = Encoding.UTF8.GetBytes(ObterSegredoJwt(configuration));
 
             services.AddAuthentication(options =>
             {
@@ -72,6 +71,26 @@ namespace FCG.Catalogo.Presentation.Configuration
                     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
                 });
             return services;
+        }
+
+        private const int TamanhoMinimoSegredoJwt = 32;
+
+        private static string ObterSegredoJwt(IConfiguration configuration)
+        {
+            var segredo = configuration["JwtSettings:Segredo"];
+
+            if (string.IsNullOrWhiteSpace(segredo))
+                throw new InvalidOperationException(
+                    "Configuração obrigatória 'JwtSettings:Segredo' não encontrada. " +
+                    "Defina via 'dotnet user-secrets' (desenvolvimento) ou pela variável de ambiente " +
+                    "'JwtSettings__Segredo' (produção, injetada pelo Azure Key Vault).");
+
+            if (segredo.Length < TamanhoMinimoSegredoJwt)
+                throw new InvalidOperationException(
+                    $"'JwtSettings:Segredo' deve ter no mínimo {TamanhoMinimoSegredoJwt} caracteres " +
+                    $"(valor atual tem {segredo.Length}).");
+
+            return segredo;
         }
     }
 }

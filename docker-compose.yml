@@ -3,7 +3,7 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: fcg-catalogo-sqlserver
     environment:
-      SA_PASSWORD: "FCG@Pass123"
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD:?Defina SA_PASSWORD no arquivo .env (veja .env.example)}"
       ACCEPT_EULA: "Y"
       MSSQL_PID: "Developer"
     ports:
@@ -16,8 +16,8 @@ services:
     image: rabbitmq:3-management
     container_name: fcg-catalogo-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: "guest"
-      RABBITMQ_DEFAULT_PASS: "guest"
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER:?Defina RABBITMQ_USER no arquivo .env (veja .env.example)}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD:?Defina RABBITMQ_PASSWORD no arquivo .env (veja .env.example)}"
     ports:
       - "5673:5672"
       - "15673:15672"
@@ -25,6 +25,23 @@ services:
       - catalogo_rabbitmq_data:/var/lib/rabbitmq
     restart: unless-stopped
 
+  mongodb:
+    image: mongo:7
+    container_name: fcg-catalogo-mongodb
+    ports:
+      - "27018:27017"
+    volumes:
+      - catalogo_mongodb_data:/data/db
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: fcg-catalogo-redis
+    ports:
+      - "6380:6379"
+    restart: unless-stopped
+
 volumes:
   catalogo_sqlserver_data:
   catalogo_rabbitmq_data:
+  catalogo_mongodb_data:
