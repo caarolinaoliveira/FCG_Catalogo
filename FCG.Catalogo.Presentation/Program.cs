@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using FCG.Catalogo.Application.Configuration;
 using FCG.Catalogo.Infrastructure.Configuration;
+using FCG.Catalogo.Infrastructure.Context;
 using FCG.Catalogo.Infrastructure.Messaging;
 using FCG.Catalogo.Presentation.Configuration;
 using FCG.Catalogo.Presentation.Logging;
 using FCG.Catalogo.Presentation.Middlewares;
+using Microsoft.EntityFrameworkCore;
 
 ActivitySource.AddActivityListener(new ActivityListener
 {
@@ -23,6 +25,12 @@ builder.Services.AddPresentation(builder.Configuration);
 builder.Services.AddHostedService<PaymentProcessedConsumer>();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<CatalogoDbContext>();
+    db.Database.Migrate();
+}
 
 if (app.Environment.IsDevelopment())
 {

@@ -23,9 +23,14 @@ namespace FCG.Catalogo.Infrastructure.Configuration
             this IServiceCollection services,
             IConfiguration configuration)
         {
+            // Lidos aqui (e não dentro das lambdas abaixo) para a aplicação falhar já no startup, e não no primeiro uso.
+            var connectionString = ObterObrigatorio(configuration, "ConnectionStrings:DefaultConnection");
+            var rabbitUsuario = ObterObrigatorio(configuration, "RabbitMQ:Usuario");
+            var rabbitSenha = ObterObrigatorio(configuration, "RabbitMQ:Senha");
+
             services.AddDbContext<CatalogoDbContext>(options =>
                 options.UseSqlServer(
-                    configuration.GetConnectionString("DefaultConnection"),
+                    connectionString,
                     b => b.MigrationsAssembly("FCG.Catalogo.Infrastructure")
                 ));
 
@@ -63,8 +68,8 @@ namespace FCG.Catalogo.Infrastructure.Configuration
                 {
                     HostName = configuration["RabbitMQ:Host"] ?? "localhost",
                     Port = int.Parse(configuration["RabbitMQ:Port"] ?? "5672"),
-                    UserName = configuration["RabbitMQ:Usuario"] ?? "guest",
-                    Password = configuration["RabbitMQ:Senha"] ?? "guest"
+                    UserName = rabbitUsuario,
+                    Password = rabbitSenha
                 };
                 return factory.CreateConnectionAsync().GetAwaiter().GetResult();
             });
@@ -79,8 +84,21 @@ namespace FCG.Catalogo.Infrastructure.Configuration
 
         services.AddHostedService<PaymentProcessedConsumer>();
 
-    
+
             return services;
+        }
+
+        private static string ObterObrigatorio(IConfiguration configuration, string chave)
+        {
+            var valor = configuration[chave];
+
+            if (string.IsNullOrWhiteSpace(valor))
+                throw new InvalidOperationException(
+                    $"Configuração obrigatória '{chave}' não encontrada. " +
+                    $"Defina via 'dotnet user-secrets' (desenvolvimento) ou pela variável de ambiente " +
+                    $"'{chave.Replace(":", "__")}' (produção, injetada pelo Azure Key Vault).");
+
+            return valor;
         }
     }
 }
