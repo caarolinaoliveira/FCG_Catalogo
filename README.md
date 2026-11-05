@@ -20,6 +20,12 @@ Microsserviço responsável pelo gerenciamento de jogos e fluxo de compra da pla
 |--------|------|------|
 | `PaymentProcessedEvent` | `payment.processed` | Adiciona jogo à biblioteca se aprovado |
 
+> **Implantação:** o consumidor de `payment.processed` já roda **dentro da API** (a imagem Docker publica só o `FCG.Catalogo.Presentation`). O projeto `FCG.Catalogo.Worker` registra o mesmo consumidor em outro host e **não deve ser implantado junto com a API**, senão as duas cópias disputam as mensagens da mesma fila.
+
+## Health check
+
+`GET /health` responde `200 Healthy` quando o processo está de pé. É usado pelas probes de readiness e liveness do Kubernetes.
+
 ## Variáveis de ambiente
 
 | Variável | Obrigatória | Descrição | Padrão |
