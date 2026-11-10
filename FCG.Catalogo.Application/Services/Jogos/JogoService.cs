@@ -17,12 +17,23 @@ namespace  FCG.Catalogo.Application.Services
 
         private readonly IJogoRepository _jogoRepository;
         private readonly IDistributedCache _cache;
+        private readonly IJogoIndexador _indexador;
+        private readonly IJogoBuscaService _busca;
 
-        public JogoService(IJogoRepository jogoRepository, IDistributedCache cache)
+        public JogoService(
+            IJogoRepository jogoRepository,
+            IDistributedCache cache,
+            IJogoIndexador indexador,
+            IJogoBuscaService busca)
         {
             _jogoRepository = jogoRepository;
             _cache = cache;
+            _indexador = indexador;
+            _busca = busca;
         }
+
+        public Task<BuscaJogosResponse> BuscarAsync(string termo, int pagina, int tamanho, CancellationToken cancellationToken = default)
+            => _busca.BuscarAsync(termo, pagina, tamanho, cancellationToken);
 
         public async Task<JogoResponse> CriarJogoAsync(CriarJogoRequest request)
         {
@@ -41,6 +52,7 @@ namespace  FCG.Catalogo.Application.Services
 
             await _jogoRepository.AdicionarAsync(jogo);
             await _cache.RemoveAsync(CacheKeyTodosJogos);
+            await _indexador.IndexarAsync(jogo);
 
             return new JogoResponse
             {
@@ -78,6 +90,7 @@ namespace  FCG.Catalogo.Application.Services
 
             await _jogoRepository.AtualizarAsync(jogo);
             await _cache.RemoveAsync(CacheKeyTodosJogos);
+            await _indexador.IndexarAsync(jogo);
 
             return new JogoResponse
             {
@@ -169,6 +182,7 @@ namespace  FCG.Catalogo.Application.Services
 
             await _jogoRepository.DeletarAsync(jogo);
             await _cache.RemoveAsync(CacheKeyTodosJogos);
+            await _indexador.RemoverAsync(jogo.Id);
         }
 
         

@@ -36,6 +36,12 @@ public class ExceptionMiddleware
             await _erroLogService.RegistrarAsync(ex, context.Request.Path, new { context.Request.Method });
             await WriteResponse(context, HttpStatusCode.Conflict, ex.Message);
         }
+        catch (BuscaIndisponivelException ex)
+        {
+            _logger.LogWarning("[{Path}] Busca indisponível: {Message}", context.Request.Path, ex.Message);
+            await _erroLogService.RegistrarAsync(ex, context.Request.Path, new { context.Request.Method });
+            await WriteResponse(context, HttpStatusCode.ServiceUnavailable, ex.Message);
+        }
         catch (UnauthorizedException ex)
         {
             _logger.LogWarning("[{Path}] Acesso não autorizado: {Message}", context.Request.Path, ex.Message);

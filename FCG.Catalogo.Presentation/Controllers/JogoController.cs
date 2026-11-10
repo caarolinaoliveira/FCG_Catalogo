@@ -3,6 +3,7 @@ using FCG.Catalogo.Application.Responses.Jogos;
 using FCG.Catalogo.Application.Services;
 using FCG.Catalogo.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using FCG.Catalogo.Presentation.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using System.Net;
 using Microsoft.Extensions.Logging; 
@@ -32,6 +33,31 @@ namespace FCG.Catalogo.Presentation.Controllers
             var response = await _jogoService.ObterTodosAsync();
 
             _logger.LogInformation("Consulta de todos os jogos retornou {Quantidade} registros", response?.Count() ?? 0);
+
+            return Ok(response);
+        }
+
+        [AllowAnonymous] // público, apesar da FallbackPolicy que exige autenticação nas demais rotas
+        [HttpGet("search")]
+        [ProducesResponseType(typeof(BuscaJogosResponse), (int)HttpStatusCode.OK)]
+        [ProducesResponseType((int)HttpStatusCode.BadRequest)]
+        [ProducesResponseType((int)HttpStatusCode.ServiceUnavailable)]
+        public async Task<IActionResult> Buscar(
+            [FromQuery] string? q,
+            [FromQuery] int pagina = 1,
+            [FromQuery] int tamanho = 10,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(q))
+                return BadRequest("O parâmetro 'q' (texto da busca) é obrigatório.");
+            if (pagina < 1)
+                return BadRequest("O parâmetro 'pagina' deve ser maior ou igual a 1.");
+            if (tamanho is < 1 or > 50)
+                return BadRequest("O parâmetro 'tamanho' deve estar entre 1 e 50.");
+
+            var response = await _jogoService.BuscarAsync(q.Trim(), pagina, tamanho, cancellationToken);
+
+            _logger.LogInformation("Busca por '{Termo}' retornou {Quantidade} de {Total} resultado(s)", q, response.Itens.Count, response.Total);
 
             return Ok(response);
         }
@@ -68,7 +94,7 @@ namespace FCG.Catalogo.Presentation.Controllers
             return Ok(response);
         }
 
-        [AllowAnonymous]
+        [Authorize(Roles = Papeis.Admin)]
         [HttpPost("cadastrar")]
         [ProducesResponseType(typeof(JogoResponse), (int)HttpStatusCode.Created)]
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
@@ -81,7 +107,7 @@ namespace FCG.Catalogo.Presentation.Controllers
             return CreatedAtAction(nameof(CadastrarJogo), new { id = response.Id }, response);
         }
 
-        [AllowAnonymous]
+        [Authorize(Roles = Papeis.Admin)]
         [HttpPut("{id:guid}")]
         [ProducesResponseType(typeof(JogoResponse), (int)HttpStatusCode.OK)]
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
@@ -94,7 +120,7 @@ namespace FCG.Catalogo.Presentation.Controllers
             return Ok(response);
         }
 
-        [AllowAnonymous]
+        [Authorize(Roles = Papeis.Admin)]
         [HttpDelete("{id:guid}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
         [ProducesResponseType((int)HttpStatusCode.NotFound) ]

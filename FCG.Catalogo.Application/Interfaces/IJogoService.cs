@@ -12,6 +12,7 @@ namespace  FCG.Catalogo.Application.Interfaces
         Task<JogoResponse> CriarJogoAsync(CriarJogoRequest jogo);
         Task<JogoResponse> AtualizarJogoAsync(Guid id, AtualizarJogoRequest jogo);
         Task DeletarJogoAsync(Guid id);
+        Task<BuscaJogosResponse> BuscarAsync(string termo, int pagina, int tamanho, CancellationToken cancellationToken = default);
 
     }
 }

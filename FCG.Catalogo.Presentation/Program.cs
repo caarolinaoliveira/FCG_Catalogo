@@ -33,10 +33,22 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-if (app.Environment.IsDevelopment())
+// Swagger: sempre em Development; fora dele, só se Swagger:Habilitado for true (padrão: desligado).
+// Swagger:RoutePrefix muda o caminho da UI e do JSON (padrão "swagger"). Atrás do Ingress, onde "/swagger"
+// já é usado pelo serviço de Usuários, usa-se um prefixo próprio (ex.: "swagger-catalogo").
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Habilitado"))
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    var swaggerPrefixo = app.Configuration["Swagger:RoutePrefix"]?.Trim('/');
+    if (string.IsNullOrWhiteSpace(swaggerPrefixo))
+        swaggerPrefixo = "swagger";
+
+    app.UseSwagger(c => c.RouteTemplate = swaggerPrefixo + "/{documentName}/swagger.json");
+    app.UseSwaggerUI(c =>
+    {
+        c.RoutePrefix = swaggerPrefixo;
+        // Caminho RELATIVO (sem "/" inicial): resolve a partir de onde a UI foi aberta, em qualquer prefixo.
+        c.SwaggerEndpoint("v1/swagger.json", "FCG Catálogo v1");
+    });
 }
 
 app.UseMiddleware<ExceptionMiddleware>();
@@ -44,5 +56,6 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHealthChecks("/health");
+// Anônimo de propósito: as probes do Kubernetes não enviam token (a política padrão exige autenticação).
+app.MapHealthChecks("/health").AllowAnonymous();
 app.Run();

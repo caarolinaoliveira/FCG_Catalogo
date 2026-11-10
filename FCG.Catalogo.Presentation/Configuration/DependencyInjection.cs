@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -65,6 +66,16 @@ namespace FCG.Catalogo.Presentation.Configuration
                     ValidateIssuerSigningKey = true
                 };
             });
+
+            // Seguro por padrão: qualquer endpoint SEM atributo explícito exige usuário autenticado.
+            // Rotas públicas precisam de [AllowAnonymous] (ou .AllowAnonymous() no /health).
+            services.AddAuthorization(options =>
+            {
+                options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .Build();
+            });
+
             services.AddControllers()
                 .AddJsonOptions(options =>
                 {

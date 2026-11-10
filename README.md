@@ -5,6 +5,7 @@ Microsserviço responsável pelo gerenciamento de jogos e fluxo de compra da pla
 ## Responsabilidades
 
 - CRUD de jogos
+- Busca de jogos com tolerância a erros de digitação e ordenação por relevância (Elasticsearch)
 - Iniciar fluxo de compra publicando um pedido
 - Adicionar jogo à biblioteca do usuário quando pagamento aprovado
 
@@ -26,6 +27,103 @@ Microsserviço responsável pelo gerenciamento de jogos e fluxo de compra da pla
 
 `GET /health` responde `200 Healthy` quando o processo está de pé. É usado pelas probes de readiness e liveness do Kubernetes.
 
+## Autorização
+
+O JWT é emitido pelo serviço de Usuários (`POST /api/usuarios/login`) e validado aqui. As roles vêm na claim `role`: **`Usuario`** (todo usuário registrado) e **`Admin`**. A API é **segura por padrão**: qualquer rota sem regra explícita exige usuário autenticado.
+
+| Rota | Regra |
+|---|---|
+| `GET /api/jogos`, `GET /api/jogos/{id}`, `GET /api/jogos/buscar/{titulo}` e `GET /api/jogos/search` (busca fuzzy) | Pública |
+| `POST /api/jogos/cadastrar`, `PUT /api/jogos/{id}`, `DELETE /api/jogos/{id}` | Role **`Admin`** (sem token: 401; sem a role: 403) |
+| `GET` e `POST /api/jogos/{jogoId}/avaliacoes` | Usuário autenticado |
+| `GET /api/biblioteca/{usuarioId}` | Usuário autenticado |
+| `POST /api/pedidos/{jogoId}`, `GET /api/pedidos/usuario/{usuarioId}` | Usuário autenticado |
+| `GET /health` | Pública (as probes do Kubernetes não enviam token) |
+
+**Limitação conhecida:** o token só traz o e-mail e a role, não o id do usuário. Por isso as rotas que recebem `usuarioId` (biblioteca, pedidos e avaliações) exigem login, mas **não verificam** se o `usuarioId` informado pertence a quem está logado. Para fechar isso, o serviço de Usuários precisa colocar o id do usuário no token.
+
+**Como obter um administrador.** Não existe seed nem endpoint que crie um `Admin`: o `registrar` sempre atribui só `Usuario`. Registre o usuário normalmente e promova-o por SQL no banco `FCG_Usuarios`:
+
+```sql
+INSERT INTO AspNetUserRoles (UserId, RoleId)
+SELECT u.Id, r.Id FROM AspNetUsers u, AspNetRoles r
+WHERE u.Email = 'admin@example.com' AND r.Name = 'Admin';
+```
+
+As roles ficam em cache por 5 minutos no login do serviço de Usuários: promova o usuário antes do primeiro login dele (ou aguarde a expiração).
+
+## Busca (Elasticsearch)
+
+`GET /api/jogos/search?q=<texto>&pagina=1&tamanho=10`: busca **pública** (sem token) com correspondência aproximada (**fuzzy**: tolera erros de digitação) e resultados **ordenados por relevância**.
+
+| Parâmetro | Obrigatório | Padrão | Regra |
+|---|---|---|---|
+| `q` | sim | | Texto da busca. Vazio ou ausente: `400` |
+| `pagina` | não | `1` | Mínimo 1 |
+| `tamanho` | não | `10` | Entre 1 e 50 |
+
+| Resposta | Quando |
+|---|---|
+| `200` | Busca realizada (mesmo sem resultado: `total` 0 e `itens` vazio) |
+| `400` | Parâmetro inválido |
+| `503` | Elasticsearch indisponível. O CRUD de jogos **não** é afetado |
+
+```json
+{
+  "pagina": 1,
+  "tamanho": 10,
+  "total": 4,
+  "itens": [
+    { "id": "…", "titulo": "Aventura Submarina", "descricao": "Explore o fundo do mar", "genero": "Aventura",
+      "preco": 49.90, "precoPromocional": null, "dataLancamento": "2026-01-01T00:00:00", "score": 3.81 },
+    { "id": "…", "titulo": "Corrida Radical", "descricao": "…com muita aventura", "genero": "Acao",
+      "preco": 59.90, "precoPromocional": null, "dataLancamento": "2026-01-01T00:00:00", "score": 0.91 }
+  ]
+}
+```
+
+**Como a relevância é calculada.** Uma consulta `multi_match` nos campos `titulo^3` e `descricao`, com `fuzziness: AUTO`, ordenada por `_score` decrescente. O título pesa **3 vezes** mais que a descrição: para `q=aventra`, os jogos com a palavra no título vêm antes dos que só a citam na descrição. O `score` de cada item é devolvido.
+
+| Tamanho do termo | Erros tolerados (distância de edição) |
+|---|---|
+| 1 a 2 letras | 0 (exato) |
+| 3 a 5 letras | 1 |
+| 6 letras ou mais | 2 |
+
+A busca também ignora **maiúsculas e acentos** (analisador `texto` = tokenizer `standard` + `lowercase` + `asciifolding`): `dragoes` acha "Mestre dos Dragões", e `aventra` acha "Aventura".
+
+**Índice `jogos`** (mapeamento explícito, 1 shard e 0 réplicas, pois há um único nó):
+
+| Campo | Tipo |
+|---|---|
+| `id` | `keyword` |
+| `titulo` | `text` (analisador `texto`) + subcampo `titulo.keyword` |
+| `descricao` | `text` (analisador `texto`) |
+| `genero` | `keyword` (nome do gênero) |
+| `preco`, `precoPromocional` | `scaled_float` (fator 100) |
+| `dataLancamento` | `date` |
+
+**Como o índice é mantido em dia.**
+
+- **CRUD:** criar e editar indexam o jogo, e excluir remove o documento, exatamente nos mesmos pontos que invalidam o cache do Redis (`JogoService`). A indexação é *best effort*: se o Elasticsearch estiver fora do ar, o erro é só **registrado no log** e o CRUD segue normalmente. Depois de uma falha, um circuito de 30s evita pagar o timeout a cada requisição. Um jogo fica visível na busca em cerca de 1 segundo.
+- **Reconciliação:** no startup e a cada 60s, o Catálogo compara o índice com o SQL Server. Se o índice não existir ou tiver uma contagem diferente da do SQL, ele é **recriado e todos os jogos são reindexados em lote (bulk de 500)**. Isso é necessário porque, no cluster, o Elasticsearch usa `emptyDir`: quando o pod dele reinicia, o índice some enquanto o Catálogo continua rodando. A reconciliação também corrige o índice depois de um período em que o Elasticsearch esteve fora do ar.
+- **Limitação:** a verificação compara a **quantidade** de documentos. Se uma *edição* se perder enquanto o Elasticsearch está fora do ar (sem mudar o número de jogos), o título antigo continua no índice até o próximo rebuild (por exemplo, o próximo restart do Catálogo).
+
+Uso de memória medido no cluster local (índice de 5.000 jogos, 400 buscas e um pico de 8 requisições simultâneas): o pod do Elasticsearch ficou em cerca de **810 Mi de memória anônima**, com o heap em no máximo 213 Mi dos 384 Mi.
+
+## Swagger
+
+| Chave | Padrão | Efeito |
+|---|---|---|
+| `Swagger:Habilitado` (`Swagger__Habilitado`) | `false` | Liga o Swagger fora do ambiente `Development`. Em `Development` ele está sempre ligado |
+| `Swagger:RoutePrefix` (`Swagger__RoutePrefix`) | `swagger` | Caminho da UI e do JSON (`/<prefixo>/index.html`, `/<prefixo>/v1/swagger.json`) |
+
+A UI usa a URL do JSON **relativa** (`v1/swagger.json`) e o documento não define `servers`, então funciona em qualquer caminho e atrás de um Ingress **sem rewrite**. Atrás do Ingress, `/swagger` já é usado pelo serviço de Usuários, por isso o Catálogo usa outro prefixo (ex.: `Swagger__RoutePrefix=swagger-catalogo`) e o Ingress precisa de uma regra para ele. O botão **Authorize** aceita o token JWT (esquema `Bearer`) obtido em `POST /api/usuarios/login`.
+
+> O Swagger documenta todas as rotas da API. Deixe `Swagger:Habilitado=false` quando não for necessário.
+
+O arquivo [`FCG.Catalogo.Presentation.http`](FCG.Catalogo.Presentation/FCG.Catalogo.Presentation.http) traz a sequência de demonstração (login de usuário e de administrador, a segurança em ação com 401 e 403, CRUD de jogos, cache e o placeholder da busca fuzzy).
+
 ## Variáveis de ambiente
 
 | Variável | Obrigatória | Descrição | Padrão |
@@ -38,6 +136,7 @@ Microsserviço responsável pelo gerenciamento de jogos e fluxo de compra da pla
 | `RabbitMQ__Port` | não | Porta do RabbitMQ | `5672` |
 | `MongoDB__ConnectionString` | não | Connection string do MongoDB (se contiver credenciais, trate como segredo) | `mongodb://localhost:27017` |
 | `Redis__ConnectionString` | não | Endereço do Redis | `localhost:6379` |
+| `Elasticsearch__Url` | não | URL do Elasticsearch (busca). Sem autenticação neste projeto | `http://localhost:9200` |
 | `NEW_RELIC_LICENSE_KEY` | em produção | Chave de licença da New Relic | - |
 
 Não há credenciais no código nem nos `appsettings.json`. Se uma variável obrigatória faltar, a aplicação não inicia e informa qual chave está faltando. Em produção (AKS) os valores vêm do Azure Key Vault, injetados como variáveis de ambiente.
@@ -52,6 +151,7 @@ docker compose up -d
 ```
 
 Este compose usa portas deslocadas para conviver com os outros: SQL Server **1434**, RabbitMQ **5673** (management em 15673), MongoDB **27018** e Redis **6380**. O MongoDB guarda as avaliações e o log de eventos; o Redis guarda o cache de jogos e bibliotecas.
+**Elasticsearch (opcional, só para a busca).** Este compose não inclui o Elasticsearch. Sem ele a API sobe e funciona normalmente (CRUD, compra, biblioteca), e apenas `GET /api/jogos/search` responde `503`; o índice é reconstruído sozinho quando o Elasticsearch aparece. Para testar a busca, suba o do compose da orquestração (`docker compose up -d elasticsearch` em `FCG_Orquestracao`, porta 9200, que é a URL padrão) ou aponte `Elasticsearch:Url` para outro.
 
 ### 2. Segredos (dotnet user-secrets)
 

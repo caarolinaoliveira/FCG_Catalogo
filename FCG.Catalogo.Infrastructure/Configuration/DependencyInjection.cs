@@ -1,3 +1,4 @@
+using Elastic.Clients.Elasticsearch;
 using FCG.Catalogo.Application.Interfaces;
 using FCG.Catalogo.Domain.Entities;
 using FCG.Catalogo.Domain.Interfaces;
@@ -5,6 +6,7 @@ using FCG.Catalogo.Infrastructure.Context;
 using FCG.Catalogo.Infrastructure.Logging;
 using FCG.Catalogo.Infrastructure.Messaging;
 using FCG.Catalogo.Infrastructure.Repository;
+using FCG.Catalogo.Infrastructure.Search;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,6 +55,20 @@ namespace FCG.Catalogo.Infrastructure.Configuration
 
             services.AddSingleton(sp =>
                 sp.GetRequiredService<IMongoClient>().GetDatabase(configuration["MongoDB:Database"] ?? "FCG_Catalogo"));
+
+            services.AddSingleton(sp =>
+            {
+                var url = configuration["Elasticsearch:Url"] ?? "http://localhost:9200";
+                // Timeout curto e sem retry: o CRUD não pode esperar por um Elasticsearch que não responde.
+                var settings = new ElasticsearchClientSettings(new Uri(url))
+                    .RequestTimeout(TimeSpan.FromSeconds(3))
+                    .MaximumRetries(0);
+                return new ElasticsearchClient(settings);
+            });
+            services.AddSingleton<ElasticsearchJogoIndice>();
+            services.AddSingleton<IJogoIndexador>(sp => sp.GetRequiredService<ElasticsearchJogoIndice>());
+            services.AddSingleton<IJogoBuscaService>(sp => sp.GetRequiredService<ElasticsearchJogoIndice>());
+            services.AddHostedService<JogoIndiceInicializador>();
 
             services.AddScoped<IAvaliacaoRepository, AvaliacaoRepository>();
             services.AddSingleton<IErroLogService, ErroLogService>();
