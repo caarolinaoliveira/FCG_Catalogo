@@ -1,6 +1,141 @@
-@FCG.Catalogo.Presentation_HostAddress = http://localhost:5133
+# Demonstração do Catálogo (com login no serviço de Usuários).
+# Funciona com a extensão "REST Client" do VS Code e com os arquivos .http do Visual Studio 2022.
+# Rode as requisições em ordem (cada bloco é separado por "###").
+# Nenhum segredo real aqui: e-mails e senhas abaixo são valores FALSOS, só para a demonstração.
+#
+# AUTORIZAÇÃO: leituras de jogos são públicas; criar, alterar e apagar jogos exige a role "Admin".
+# Não existe seed nem endpoint que crie um administrador. O passo 3 precisa de um usuário Admin:
+# registre-o pelo passo 1 (trocando o e-mail) e promova-o por SQL no banco FCG_Usuarios:
+#
+#   INSERT INTO AspNetUserRoles (UserId, RoleId)
+#   SELECT u.Id, r.Id FROM AspNetUsers u, AspNetRoles r
+#   WHERE u.Email = 'admin@example.com' AND r.Name = 'Admin';
+#
+# As roles ficam em cache por 5 minutos no login: promova o usuário ANTES do primeiro login dele.
 
-GET {{FCG.Catalogo.Presentation_HostAddress}}/weatherforecast/
-Accept: application/json
+# ---------------------------------------------------------------------------------------------
+# Variáveis
+# ---------------------------------------------------------------------------------------------
+# Ingress: Kubernetes local (http://localhost) ou AKS (troque pelo IP público do Ingress).
+@baseUrl = http://localhost
 
-###
+# Sem Ingress (Docker Compose): comente as duas linhas "= {{baseUrl}}" e descomente estas duas.
+# @usuariosUrl = http://localhost:5101
+# @catalogoUrl = http://localhost:5133
+@usuariosUrl = {{baseUrl}}
+@catalogoUrl = {{baseUrl}}
+
+# Usuário comum e administrador de demonstração (valores falsos).
+@demoEmail = demo@example.com
+@demoSenha = TroqueEstaSenha#1
+@adminEmail = admin@example.com
+@adminSenha = TroqueEstaSenha#2
+
+### 1. Registrar o usuário comum de demonstração (só na primeira vez; se já existir, responde erro)
+POST {{usuariosUrl}}/api/usuarios/registrar
+Content-Type: application/json
+
+{
+  "nome": "Usuario Demo",
+  "email": "{{demoEmail}}",
+  "senha": "{{demoSenha}}",
+  "confirmacaoSenha": "{{demoSenha}}",
+  "dataNascimento": "1990-05-10"
+}
+
+### 2. Login do usuário comum (devolve o token JWT como TEXTO puro, não JSON)
+# @name login
+POST {{usuariosUrl}}/api/usuarios/login
+Content-Type: application/json
+
+{
+  "email": "{{demoEmail}}",
+  "senha": "{{demoSenha}}"
+}
+
+### Variável @token: o corpo inteiro da resposta do login (token do usuário comum)
+@token = {{login.response.body.*}}
+
+### 3. Login do ADMINISTRADOR (o usuário precisa existir e ter a role Admin; veja o topo do arquivo)
+# @name loginAdmin
+POST {{usuariosUrl}}/api/usuarios/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "senha": "{{adminSenha}}"
+}
+
+### Variável @adminToken: o corpo inteiro da resposta do login do administrador
+@adminToken = {{loginAdmin.response.body.*}}
+
+### 4. Segurança: criar jogo SEM token -> 401
+POST {{catalogoUrl}}/api/jogos/cadastrar
+Content-Type: application/json
+
+{
+  "titulo": "Nao deve ser criado",
+  "descricao": "teste",
+  "genero": 1,
+  "preco": 10,
+  "dataLancamento": "2026-01-01T00:00:00Z"
+}
+
+### 5. Segurança: criar jogo com token de usuário comum -> 403
+POST {{catalogoUrl}}/api/jogos/cadastrar
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "titulo": "Nao deve ser criado",
+  "descricao": "teste",
+  "genero": 1,
+  "preco": 10,
+  "dataLancamento": "2026-01-01T00:00:00Z"
+}
+
+### 6. Cadastrar um jogo como ADMIN -> 201
+# @name criarJogo
+POST {{catalogoUrl}}/api/jogos/cadastrar
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "titulo": "Jogo de Demonstracao",
+  "descricao": "Jogo criado pela sequencia de demonstracao",
+  "genero": 1,
+  "preco": 59.9,
+  "dataLancamento": "2026-01-01T00:00:00Z"
+}
+
+### Variável @jogoId: o id do jogo recém-criado
+@jogoId = {{criarJogo.response.body.$.id}}
+
+### 7. Listar os jogos, público e sem token (1ª chamada: lê do banco e preenche o cache no Redis)
+GET {{catalogoUrl}}/api/jogos
+
+### 8. Listar os jogos DE NOVO (mesma chamada: vem do cache; compare o tempo e, no New Relic, o cacheHit)
+GET {{catalogoUrl}}/api/jogos
+
+### 9. Obter o jogo pelo id (público)
+GET {{catalogoUrl}}/api/jogos/{{jogoId}}
+
+### 10. Buscar pelo título (público; hoje a busca é EXATA)
+GET {{catalogoUrl}}/api/jogos/buscar/Jogo%20de%20Demonstracao
+
+### 11. Atualizar o jogo como ADMIN (campos opcionais: só os informados mudam)
+PUT {{catalogoUrl}}/api/jogos/{{jogoId}}
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "preco": 49.9,
+  "descricao": "Descricao atualizada"
+}
+
+### 12. Busca fuzzy: PLACEHOLDER, ainda NÃO existe (será feita com Elasticsearch). Pública quando existir.
+# GET {{catalogoUrl}}/api/jogos/search?q=aventra
+
+### 13. Apagar o jogo como ADMIN -> 204
+DELETE {{catalogoUrl}}/api/jogos/{{jogoId}}
+Authorization: Bearer {{adminToken}}

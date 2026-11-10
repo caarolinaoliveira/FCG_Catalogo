@@ -51,6 +51,19 @@ WHERE u.Email = 'admin@example.com' AND r.Name = 'Admin';
 
 As roles ficam em cache por 5 minutos no login do serviço de Usuários: promova o usuário antes do primeiro login dele (ou aguarde a expiração).
 
+## Swagger
+
+| Chave | Padrão | Efeito |
+|---|---|---|
+| `Swagger:Habilitado` (`Swagger__Habilitado`) | `false` | Liga o Swagger fora do ambiente `Development`. Em `Development` ele está sempre ligado |
+| `Swagger:RoutePrefix` (`Swagger__RoutePrefix`) | `swagger` | Caminho da UI e do JSON (`/<prefixo>/index.html`, `/<prefixo>/v1/swagger.json`) |
+
+A UI usa a URL do JSON **relativa** (`v1/swagger.json`) e o documento não define `servers`, então funciona em qualquer caminho e atrás de um Ingress **sem rewrite**. Atrás do Ingress, `/swagger` já é usado pelo serviço de Usuários, por isso o Catálogo usa outro prefixo (ex.: `Swagger__RoutePrefix=swagger-catalogo`) e o Ingress precisa de uma regra para ele. O botão **Authorize** aceita o token JWT (esquema `Bearer`) obtido em `POST /api/usuarios/login`.
+
+> O Swagger documenta todas as rotas da API. Deixe `Swagger:Habilitado=false` quando não for necessário.
+
+O arquivo [`FCG.Catalogo.Presentation.http`](FCG.Catalogo.Presentation/FCG.Catalogo.Presentation.http) traz a sequência de demonstração (login de usuário e de administrador, a segurança em ação com 401 e 403, CRUD de jogos, cache e o placeholder da busca fuzzy).
+
 ## Variáveis de ambiente
 
 | Variável | Obrigatória | Descrição | Padrão |
