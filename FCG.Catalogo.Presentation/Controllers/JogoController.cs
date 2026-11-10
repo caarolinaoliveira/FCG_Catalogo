@@ -37,6 +37,31 @@ namespace FCG.Catalogo.Presentation.Controllers
             return Ok(response);
         }
 
+        [AllowAnonymous] // público, apesar da FallbackPolicy que exige autenticação nas demais rotas
+        [HttpGet("search")]
+        [ProducesResponseType(typeof(BuscaJogosResponse), (int)HttpStatusCode.OK)]
+        [ProducesResponseType((int)HttpStatusCode.BadRequest)]
+        [ProducesResponseType((int)HttpStatusCode.ServiceUnavailable)]
+        public async Task<IActionResult> Buscar(
+            [FromQuery] string? q,
+            [FromQuery] int pagina = 1,
+            [FromQuery] int tamanho = 10,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(q))
+                return BadRequest("O parâmetro 'q' (texto da busca) é obrigatório.");
+            if (pagina < 1)
+                return BadRequest("O parâmetro 'pagina' deve ser maior ou igual a 1.");
+            if (tamanho is < 1 or > 50)
+                return BadRequest("O parâmetro 'tamanho' deve estar entre 1 e 50.");
+
+            var response = await _jogoService.BuscarAsync(q.Trim(), pagina, tamanho, cancellationToken);
+
+            _logger.LogInformation("Busca por '{Termo}' retornou {Quantidade} de {Total} resultado(s)", q, response.Itens.Count, response.Total);
+
+            return Ok(response);
+        }
+
         [AllowAnonymous]
         [HttpGet("{id:guid}")]
         [ProducesResponseType(typeof(JogoResponse), (int)HttpStatusCode.OK)]

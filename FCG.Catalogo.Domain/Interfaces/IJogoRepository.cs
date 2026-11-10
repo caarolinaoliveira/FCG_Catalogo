@@ -12,6 +12,7 @@ namespace FCG.Catalogo.Domain.Interfaces
             Task<List<JogoEntity>> ObterPorDataLancamentoAsync(DateTime dataInicio, DateTime dataFim);
             Task<JogoEntity?> ObterPorTituloAsync(string titulo);
             Task DeletarAsync(JogoEntity jogo);
+            Task<int> ContarAsync();
 
     }
 }

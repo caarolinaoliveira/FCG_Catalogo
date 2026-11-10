@@ -133,9 +133,66 @@ Authorization: Bearer {{adminToken}}
   "descricao": "Descricao atualizada"
 }
 
-### 12. Busca fuzzy: PLACEHOLDER, ainda NÃO existe (será feita com Elasticsearch). Pública quando existir.
-# GET {{catalogoUrl}}/api/jogos/search?q=aventra
+### 12. Massa para a busca: jogo com a palavra "aventura" no TÍTULO (como ADMIN)
+# @name criarJogoTitulo
+POST {{catalogoUrl}}/api/jogos/cadastrar
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
 
-### 13. Apagar o jogo como ADMIN -> 204
+{
+  "titulo": "Aventura Submarina",
+  "descricao": "Explore o fundo do mar e descubra tesouros",
+  "genero": 1,
+  "preco": 49.9,
+  "dataLancamento": "2026-01-01T00:00:00Z"
+}
+
+### Variável @jogoTituloId
+@jogoTituloId = {{criarJogoTitulo.response.body.$.id}}
+
+### 13. Massa para a busca: jogo com "aventura" SÓ na DESCRIÇÃO (como ADMIN)
+# @name criarJogoDescricao
+POST {{catalogoUrl}}/api/jogos/cadastrar
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "titulo": "Corrida Radical",
+  "descricao": "Corrida de carros em pistas futuristas com muita aventura",
+  "genero": 0,
+  "preco": 59.9,
+  "dataLancamento": "2026-01-01T00:00:00Z"
+}
+
+### Variável @jogoDescricaoId
+@jogoDescricaoId = {{criarJogoDescricao.response.body.$.id}}
+
+### 14. Busca fuzzy com erro de digitação ("aventra"): título vem antes de descrição, veja o "score"
+GET {{catalogoUrl}}/api/jogos/search?q=aventra
+
+### 15. Outro erro de digitação: "demostracao" (faltou o "n") acha "Jogo de Demonstracao"
+GET {{catalogoUrl}}/api/jogos/search?q=demostracao
+
+### 16. Sem acento e com erro: "submarna" acha "Aventura Submarina"
+GET {{catalogoUrl}}/api/jogos/search?q=submarna
+
+### 17. Busca SEM RESULTADO: total 0 e lista vazia
+GET {{catalogoUrl}}/api/jogos/search?q=xyzabc
+
+### 18. Paginação: 1 resultado por página, página 2
+GET {{catalogoUrl}}/api/jogos/search?q=aventura&pagina=2&tamanho=1
+
+### 19. Parâmetro inválido: sem "q" -> 400
+GET {{catalogoUrl}}/api/jogos/search
+
+### 20. Apagar os jogos de demonstração como ADMIN (cada um -> 204; a busca deixa de achá-los)
 DELETE {{catalogoUrl}}/api/jogos/{{jogoId}}
+Authorization: Bearer {{adminToken}}
+
+###
+DELETE {{catalogoUrl}}/api/jogos/{{jogoTituloId}}
+Authorization: Bearer {{adminToken}}
+
+###
+DELETE {{catalogoUrl}}/api/jogos/{{jogoDescricaoId}}
 Authorization: Bearer {{adminToken}}

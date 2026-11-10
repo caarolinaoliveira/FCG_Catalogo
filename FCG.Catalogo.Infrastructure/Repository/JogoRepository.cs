@@ -13,6 +13,8 @@ namespace FCG.Catalogo.Infrastructure.Repository
         {
         }
 
+        public async Task<int> ContarAsync() => await DbSet.CountAsync();
+
         public async Task<List<JogoEntity>> ObterPorGeneroAsync(JogoGeneroEnum genero)
         {
             return await DbSet.AsNoTracking()
