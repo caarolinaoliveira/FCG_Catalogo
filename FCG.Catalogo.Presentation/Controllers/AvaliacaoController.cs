@@ -20,7 +20,7 @@ namespace FCG.Catalogo.Presentation.Controllers
             _logger = logger;
         }
 
-        [AllowAnonymous]
+        [Authorize]
         [HttpPost]
         [ProducesResponseType(typeof(AvaliacaoResponse), (int)HttpStatusCode.Created)]
         [ProducesResponseType((int)HttpStatusCode.NotFound)]
@@ -33,7 +33,7 @@ namespace FCG.Catalogo.Presentation.Controllers
             return CreatedAtAction(nameof(ObterPorJogo), new { jogoId }, response);
         }
 
-        [AllowAnonymous]
+        [Authorize]
         [HttpGet]
         [ProducesResponseType(typeof(AvaliacaoResumoResponse), (int)HttpStatusCode.OK)]
         public async Task<IActionResult> ObterPorJogo(Guid jogoId)

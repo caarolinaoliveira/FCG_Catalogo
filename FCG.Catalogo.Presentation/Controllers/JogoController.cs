@@ -3,6 +3,7 @@ using FCG.Catalogo.Application.Responses.Jogos;
 using FCG.Catalogo.Application.Services;
 using FCG.Catalogo.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using FCG.Catalogo.Presentation.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using System.Net;
 using Microsoft.Extensions.Logging; 
@@ -68,7 +69,7 @@ namespace FCG.Catalogo.Presentation.Controllers
             return Ok(response);
         }
 
-        [AllowAnonymous]
+        [Authorize(Roles = Papeis.Admin)]
         [HttpPost("cadastrar")]
         [ProducesResponseType(typeof(JogoResponse), (int)HttpStatusCode.Created)]
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
@@ -81,7 +82,7 @@ namespace FCG.Catalogo.Presentation.Controllers
             return CreatedAtAction(nameof(CadastrarJogo), new { id = response.Id }, response);
         }
 
-        [AllowAnonymous]
+        [Authorize(Roles = Papeis.Admin)]
         [HttpPut("{id:guid}")]
         [ProducesResponseType(typeof(JogoResponse), (int)HttpStatusCode.OK)]
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
@@ -94,7 +95,7 @@ namespace FCG.Catalogo.Presentation.Controllers
             return Ok(response);
         }
 
-        [AllowAnonymous]
+        [Authorize(Roles = Papeis.Admin)]
         [HttpDelete("{id:guid}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
         [ProducesResponseType((int)HttpStatusCode.NotFound) ]

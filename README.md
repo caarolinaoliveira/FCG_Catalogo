@@ -26,6 +26,31 @@ Microsserviço responsável pelo gerenciamento de jogos e fluxo de compra da pla
 
 `GET /health` responde `200 Healthy` quando o processo está de pé. É usado pelas probes de readiness e liveness do Kubernetes.
 
+## Autorização
+
+O JWT é emitido pelo serviço de Usuários (`POST /api/usuarios/login`) e validado aqui. As roles vêm na claim `role`: **`Usuario`** (todo usuário registrado) e **`Admin`**. A API é **segura por padrão**: qualquer rota sem regra explícita exige usuário autenticado.
+
+| Rota | Regra |
+|---|---|
+| `GET /api/jogos`, `GET /api/jogos/{id}`, `GET /api/jogos/buscar/{titulo}` (e a futura busca) | Pública |
+| `POST /api/jogos/cadastrar`, `PUT /api/jogos/{id}`, `DELETE /api/jogos/{id}` | Role **`Admin`** (sem token: 401; sem a role: 403) |
+| `GET` e `POST /api/jogos/{jogoId}/avaliacoes` | Usuário autenticado |
+| `GET /api/biblioteca/{usuarioId}` | Usuário autenticado |
+| `POST /api/pedidos/{jogoId}`, `GET /api/pedidos/usuario/{usuarioId}` | Usuário autenticado |
+| `GET /health` | Pública (as probes do Kubernetes não enviam token) |
+
+**Limitação conhecida:** o token só traz o e-mail e a role, não o id do usuário. Por isso as rotas que recebem `usuarioId` (biblioteca, pedidos e avaliações) exigem login, mas **não verificam** se o `usuarioId` informado pertence a quem está logado. Para fechar isso, o serviço de Usuários precisa colocar o id do usuário no token.
+
+**Como obter um administrador.** Não existe seed nem endpoint que crie um `Admin`: o `registrar` sempre atribui só `Usuario`. Registre o usuário normalmente e promova-o por SQL no banco `FCG_Usuarios`:
+
+```sql
+INSERT INTO AspNetUserRoles (UserId, RoleId)
+SELECT u.Id, r.Id FROM AspNetUsers u, AspNetRoles r
+WHERE u.Email = 'admin@example.com' AND r.Name = 'Admin';
+```
+
+As roles ficam em cache por 5 minutos no login do serviço de Usuários: promova o usuário antes do primeiro login dele (ou aguarde a expiração).
+
 ## Variáveis de ambiente
 
 | Variável | Obrigatória | Descrição | Padrão |

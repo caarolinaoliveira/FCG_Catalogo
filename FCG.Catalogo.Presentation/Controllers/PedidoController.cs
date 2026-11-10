@@ -20,7 +20,7 @@ namespace FCG.Catalogo.Presentation.Controllers
             _logger = logger;
         }
 
-        [AllowAnonymous]
+        [Authorize]
         [HttpPost("{jogoId:guid}")]
         [ProducesResponseType((int)HttpStatusCode.Accepted)]
         [ProducesResponseType((int)HttpStatusCode.NotFound)]
@@ -40,7 +40,7 @@ namespace FCG.Catalogo.Presentation.Controllers
             return Accepted();
         }
 
-        [AllowAnonymous]
+        [Authorize]
         [HttpGet("usuario/{usuarioId:guid}")]
         [ProducesResponseType(typeof(List<PedidoResponse>), (int)HttpStatusCode.OK)]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]

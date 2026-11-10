@@ -44,5 +44,6 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHealthChecks("/health");
+// Anônimo de propósito: as probes do Kubernetes não enviam token (a política padrão exige autenticação).
+app.MapHealthChecks("/health").AllowAnonymous();
 app.Run();

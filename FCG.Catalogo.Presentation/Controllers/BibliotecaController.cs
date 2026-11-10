@@ -18,7 +18,7 @@ namespace FCG.Catalogo.Presentation.Controllers
             _logger = logger;
         }
 
-        [AllowAnonymous]
+        [Authorize]
         [HttpGet("{usuarioId:guid}")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
