@@ -78,7 +78,7 @@ public class PedidoServiceTests
         await _publisher.DidNotReceiveWithAnyArgs().PublicarAsync<OrderPlacedEvent>(default!, default!);
     }
 
-    [Fact(Skip = "Bug conhecido: jogo inexistente lança Exception genérica (vira 500) em vez de NotFoundException (404 documentado no controller).")]
+    [Fact]
     public async Task Jogo_inexistente_lanca_nao_encontrado()
     {
         _jogos.ObterPorIdAsync(Arg.Any<Guid>()).Returns((JogoEntity?)null);

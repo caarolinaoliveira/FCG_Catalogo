@@ -31,7 +31,7 @@ namespace FCG.Catalogo.Application.Services.Pedidos
         {
             var jogo = await _jogoRepository.ObterPorIdAsync(jogoId);
             if (jogo == null)
-                throw new Exception($"Jogo {jogoId} não encontrado.");
+                throw new NotFoundException("Jogo não encontrado.");
 
             var japossui = await _bibliotecaRepository.UsuarioPossuiJogoAsync(usuarioId, jogoId);
             if (japossui)

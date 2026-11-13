@@ -9,6 +9,7 @@ using FCG.Catalogo.Domain.Enums;
 using FCG.Catalogo.Domain.Exceptions;
 using FCG.Catalogo.Domain.Interfaces;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -27,7 +28,7 @@ public class JogoServiceTests
     public JogoServiceTests()
     {
         _cache.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<byte[]?>(null));
-        _service = new JogoService(_repository, _cache, _indexador, _busca);
+        _service = new JogoService(_repository, _cache, _indexador, _busca, NullLogger<JogoService>.Instance);
     }
 
     private static JogoEntity JogoExistente() => new()
@@ -125,15 +126,79 @@ public class JogoServiceTests
             await _cache.DidNotReceiveWithAnyArgs().RemoveAsync(default!, default);
         }
 
-        [Fact(Skip = "Bug conhecido: o cache é só otimização, mas uma falha do Redis derruba a listagem com 500.")]
+        [Fact]
         public async Task Redis_fora_do_ar_nao_impede_a_listagem()
         {
             _cache.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("Redis indisponível"));
+            _cache.SetAsync(default!, default!, default!, default).ThrowsAsyncForAnyArgs(new InvalidOperationException("Redis indisponível"));
             _repository.ObterTodosAsync().Returns(new List<JogoEntity> { JogoExistente() });
 
             var resultado = await _service.ObterTodosAsync();
 
             Assert.Single(resultado);
+            await _repository.Received(1).ObterTodosAsync();
+        }
+
+        [Fact]
+        public async Task Falha_ao_gravar_no_cache_nao_impede_a_listagem()
+        {
+            _repository.ObterTodosAsync().Returns(new List<JogoEntity> { JogoExistente() });
+            _cache.SetAsync(default!, default!, default!, default).ThrowsAsyncForAnyArgs(new InvalidOperationException("Redis indisponível"));
+
+            var resultado = await _service.ObterTodosAsync();
+
+            Assert.Single(resultado);
+        }
+
+        [Fact]
+        public async Task Entrada_corrompida_no_cache_e_tratada_como_miss()
+        {
+            CacheComJogos("isto-nao-e-json");
+            _repository.ObterTodosAsync().Returns(new List<JogoEntity> { JogoExistente() });
+
+            var resultado = await _service.ObterTodosAsync();
+
+            Assert.Single(resultado);
+            await _repository.Received(1).ObterTodosAsync();
+        }
+
+        [Fact]
+        public async Task Criar_com_redis_fora_do_ar_conclui_a_gravacao_e_ainda_indexa()
+        {
+            _cache.RemoveAsync(default!, default).ThrowsAsyncForAnyArgs(new InvalidOperationException("Redis indisponível"));
+            JogoEntity? salvo = null;
+            await _repository.AdicionarAsync(Arg.Do<JogoEntity>(j => salvo = j));
+
+            var resposta = await _service.CriarJogoAsync(NovoJogo());
+
+            Assert.Equal("Mario", resposta.Titulo);
+            await _indexador.Received(1).IndexarAsync(salvo!);
+        }
+
+        [Fact]
+        public async Task Editar_com_redis_fora_do_ar_conclui_a_atualizacao_e_ainda_indexa()
+        {
+            var jogo = JogoExistente();
+            _repository.ObterPorIdAsync(jogo.Id).Returns(jogo);
+            _cache.RemoveAsync(default!, default).ThrowsAsyncForAnyArgs(new InvalidOperationException("Redis indisponível"));
+
+            var resposta = await _service.AtualizarJogoAsync(jogo.Id, new AtualizarJogoRequest { Preco = 10m });
+
+            Assert.Equal(10m, resposta.Preco);
+            await _indexador.Received(1).IndexarAsync(jogo);
+        }
+
+        [Fact]
+        public async Task Excluir_com_redis_fora_do_ar_conclui_a_exclusao_e_ainda_remove_do_indice()
+        {
+            var jogo = JogoExistente();
+            _repository.ObterPorIdAsync(jogo.Id).Returns(jogo);
+            _cache.RemoveAsync(default!, default).ThrowsAsyncForAnyArgs(new InvalidOperationException("Redis indisponível"));
+
+            await _service.DeletarJogoAsync(jogo.Id);
+
+            await _repository.Received(1).DeletarAsync(jogo);
+            await _indexador.Received(1).RemoverAsync(jogo.Id);
         }
     }
 

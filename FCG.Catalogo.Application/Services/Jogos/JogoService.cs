@@ -6,6 +6,7 @@ using FCG.Catalogo.Domain.Entities;
 using FCG.Catalogo.Domain.Exceptions;
 using FCG.Catalogo.Domain.Enums;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 
@@ -19,17 +20,60 @@ namespace  FCG.Catalogo.Application.Services
         private readonly IDistributedCache _cache;
         private readonly IJogoIndexador _indexador;
         private readonly IJogoBuscaService _busca;
+        private readonly ILogger<JogoService> _logger;
 
         public JogoService(
             IJogoRepository jogoRepository,
             IDistributedCache cache,
             IJogoIndexador indexador,
-            IJogoBuscaService busca)
+            IJogoBuscaService busca,
+            ILogger<JogoService> logger)
         {
             _jogoRepository = jogoRepository;
             _cache = cache;
             _indexador = indexador;
             _busca = busca;
+            _logger = logger;
+        }
+
+        // O cache é só otimização: se o Redis falhar, o fluxo segue pelo banco.
+        private async Task InvalidarCacheAsync()
+        {
+            try
+            {
+                await _cache.RemoveAsync(CacheKeyTodosJogos);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falha ao invalidar o cache da listagem de jogos; ele expira sozinho em até 60s");
+            }
+        }
+
+        private async Task<List<JogoResponse>?> LerListagemDoCacheAsync()
+        {
+            try
+            {
+                var cacheado = await _cache.GetStringAsync(CacheKeyTodosJogos);
+                return cacheado is null ? null : JsonSerializer.Deserialize<List<JogoResponse>>(cacheado) ?? new List<JogoResponse>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falha ao ler o cache da listagem de jogos; consultando o banco");
+                return null;
+            }
+        }
+
+        private async Task GravarListagemNoCacheAsync(List<JogoResponse> jogos)
+        {
+            try
+            {
+                await _cache.SetStringAsync(CacheKeyTodosJogos, JsonSerializer.Serialize(jogos),
+                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60) });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falha ao gravar o cache da listagem de jogos");
+            }
         }
 
         public Task<BuscaJogosResponse> BuscarAsync(string termo, int pagina, int tamanho, CancellationToken cancellationToken = default)
@@ -51,7 +95,7 @@ namespace  FCG.Catalogo.Application.Services
             };
 
             await _jogoRepository.AdicionarAsync(jogo);
-            await _cache.RemoveAsync(CacheKeyTodosJogos);
+            await InvalidarCacheAsync();
             await _indexador.IndexarAsync(jogo);
 
             return new JogoResponse
@@ -89,7 +133,7 @@ namespace  FCG.Catalogo.Application.Services
                 jogo.Genero = request.Genero.Value;
 
             await _jogoRepository.AtualizarAsync(jogo);
-            await _cache.RemoveAsync(CacheKeyTodosJogos);
+            await InvalidarCacheAsync();
             await _indexador.IndexarAsync(jogo);
 
             return new JogoResponse
@@ -106,11 +150,11 @@ namespace  FCG.Catalogo.Application.Services
 
         public async Task<List<JogoResponse>> ObterTodosAsync()
         {
-            var cacheado = await _cache.GetStringAsync(CacheKeyTodosJogos);
+            var cacheado = await LerListagemDoCacheAsync();
             if (cacheado is not null)
             {
                 NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("cacheHit", true);
-                return JsonSerializer.Deserialize<List<JogoResponse>>(cacheado) ?? new List<JogoResponse>();
+                return cacheado;
             }
 
             NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("cacheHit", false);
@@ -128,8 +172,7 @@ namespace  FCG.Catalogo.Application.Services
                 DataCriacao = jogo.DataCriacao
             }).ToList();
 
-            await _cache.SetStringAsync(CacheKeyTodosJogos, JsonSerializer.Serialize(response),
-                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60) });
+            await GravarListagemNoCacheAsync(response);
 
             return response;
         }
@@ -181,7 +224,7 @@ namespace  FCG.Catalogo.Application.Services
                 throw new NotFoundException("Jogo não encontrado.");
 
             await _jogoRepository.DeletarAsync(jogo);
-            await _cache.RemoveAsync(CacheKeyTodosJogos);
+            await InvalidarCacheAsync();
             await _indexador.RemoverAsync(jogo.Id);
         }
 
