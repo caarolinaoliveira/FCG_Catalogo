@@ -189,3 +189,6 @@ dotnet run --project FCG.Catalogo.Presentation
 ```
 
 > ⚠️ Este repositório não contém credenciais. Os exemplos acima usam valores falsos; nunca versione o `.env` nem os seus segredos reais.
+
+
+# teste gravação tc fase 4 
