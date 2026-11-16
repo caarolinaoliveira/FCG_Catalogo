@@ -122,7 +122,7 @@ A UI usa a URL do JSON **relativa** (`v1/swagger.json`) e o documento não defin
 
 > O Swagger documenta todas as rotas da API. Deixe `Swagger:Habilitado=false` quando não for necessário.
 
-O arquivo [`FCG.Catalogo.Presentation.http`](FCG.Catalogo.Presentation/FCG.Catalogo.Presentation.http) traz a sequência de demonstração (login de usuário e de administrador, a segurança em ação com 401 e 403, CRUD de jogos, cache e o placeholder da busca fuzzy).
+O arquivo [`FCG.Catalogo.Presentation.http`](FCG.Catalogo.Presentation/FCG.Catalogo.Presentation.http) traz a sequência de demonstração (login de usuário e de administrador, a segurança em ação com 401 e 403, CRUD de jogos, cache e exemplos da busca fuzzy).
 
 ## Variáveis de ambiente
 
@@ -151,6 +151,7 @@ docker compose up -d
 ```
 
 Este compose usa portas deslocadas para conviver com os outros: SQL Server **1434**, RabbitMQ **5673** (management em 15673), MongoDB **27018** e Redis **6380**. O MongoDB guarda as avaliações e o log de eventos; o Redis guarda o cache de jogos e bibliotecas.
+
 **Elasticsearch (opcional, só para a busca).** Este compose não inclui o Elasticsearch. Sem ele a API sobe e funciona normalmente (CRUD, compra, biblioteca), e apenas `GET /api/jogos/search` responde `503`; o índice é reconstruído sozinho quando o Elasticsearch aparece. Para testar a busca, suba o do compose da orquestração (`docker compose up -d elasticsearch` em `FCG_Orquestracao`, porta 9200, que é a URL padrão) ou aponte `Elasticsearch:Url` para outro.
 
 ### 2. Segredos (dotnet user-secrets)
@@ -189,6 +190,3 @@ dotnet run --project FCG.Catalogo.Presentation
 ```
 
 > ⚠️ Este repositório não contém credenciais. Os exemplos acima usam valores falsos; nunca versione o `.env` nem os seus segredos reais.
-
-
-# teste gravação tc fase  
